@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 // AppName - name of this application
@@ -24,13 +25,14 @@ const ProxyTypeFCGI = "fcgi"
 
 // Config - app configuration struct
 type Config struct {
-	ProxyType string `json:"proxy_type"`
-	Listen    string `json:"listen"`  // 8081, /app/listen.sock
-	Connect   string `json:"connect"` // 127.0.0.1:9000, /app/run.sock
-	Plugins   struct {
+	ProxyType  string `json:"proxy_type"`
+	Listen     string `json:"listen"`  // 8081, /app/listen.sock
+	Connect    string `json:"connect"` // 127.0.0.1:9000, /app/run.sock
+	Extensions struct {
+		Path    string                 `json:"path"`
 		Enabled []string               `json:"enabled"`
 		Config  map[string]interface{} `json:"config"`
-	} `json:"plugins"`
+	} `json:"extensions"`
 }
 
 // GetDefaultConfig - get default configuration values
@@ -43,17 +45,27 @@ func GetDefaultConfig() Config {
 		proxyType = ProxyTypeHTTP
 	}
 	listenPort = ":" + listenPort
-	return Config{
+	config := Config{
 		ProxyType: proxyType,
 		Listen:    listenPort,
 		Connect:   "/run/app.sock",
 	}
+	config.Extensions.Path = "ext"
+	execPath, err := os.Executable()
+	if err == nil {
+		config.Extensions.Path = filepath.Join(filepath.Dir(execPath), "ext")
+	}
+	return config
 }
 
 // LoadConfigFile - load configuration from file
 func LoadConfigFile(configFilePath string) Config {
 	if configFilePath == "" {
 		configFilePath = DefaultConfigFilePath
+		execPath, err := os.Executable()
+		if err == nil {
+			configFilePath = filepath.Join(filepath.Dir(execPath), DefaultConfigFilePath)
+		}
 	}
 	config := GetDefaultConfig()
 	f, err := os.Open(configFilePath)
