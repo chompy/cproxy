@@ -22,9 +22,12 @@ func HandleRequest(r *http.Request, config *cproxy.Config, exts []cproxy.Extensi
 	log.Println("EVENT :: OnRequest")
 	var resp *http.Response
 	for index := range exts {
-		err := exts[index].OnRequest(r, resp)
+		resp, err := exts[index].OnRequest(r)
 		if err != nil {
 			return nil, err
+		}
+		if resp != nil {
+			break
 		}
 	}
 
@@ -37,37 +40,56 @@ func HandleRequest(r *http.Request, config *cproxy.Config, exts []cproxy.Extensi
 		}
 	}
 
+	// convert resp to bytes, so same response can be sent to all
+	// OnCollectSubRequest without read issues and fear of modification
+	respBytes, err := cproxy.HTTPResponseToBytes(resp)
+	if err != nil {
+		return nil, err
+	}
+
 	// call 'OnCollectSubRequest' , mostly used for cache esi
 	log.Println("EVENT :: OnCollectSubRequest")
-	subResps := make([][]*http.Response, 0)
+	extSubResps := make([][]*http.Response, 0)
 	for index := range exts {
+		resp, err = cproxy.HTTPResponseFromBytes(respBytes)
+		resp.Request = r
+		if err != nil {
+			return nil, err
+		}
 		subReqs, err := exts[index].OnCollectSubRequests(resp)
 		if err != nil {
 			return nil, err
 		}
-		resps := make([]*http.Response, 0)
+		subResps := make([]*http.Response, 0)
 		for subIndex := range subReqs {
-			resp, err := HandleRequest(subReqs[subIndex], config, exts)
+			subResp, err := HandleRequest(subReqs[subIndex], config, exts)
 			if err != nil {
 				return nil, err
 			}
-			resps = append(
-				resps,
-				resp,
+			subResps = append(
+				subResps,
+				subResp,
 			)
 		}
-		subResps = append(
+		extSubResps = append(
+			extSubResps,
 			subResps,
-			resps,
 		)
 	}
+
+	// convert bytes back to repsonse for final output
+	resp, err = cproxy.HTTPResponseFromBytes(respBytes)
+	if err != nil {
+		return nil, err
+	}
+	resp.Request = r
 
 	// call 'OnResponse'
 	log.Println("EVENT :: OnResponse")
 	for index := range exts {
-		err := exts[index].OnResponse(
+		resp, err = exts[index].OnResponse(
 			resp,
-			subResps[index],
+			extSubResps[index],
 		)
 		if err != nil {
 			return nil, err

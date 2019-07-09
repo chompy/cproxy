@@ -9,12 +9,10 @@ import (
 
 // Extension - app extension
 type Extension struct {
-	plugin               *plugin.Plugin
-	OnLoad               func() error
 	OnUnload             func() error
-	OnRequest            func(req *http.Request, resp *http.Response) error
+	OnRequest            func(req *http.Request) (*http.Response, error)
 	OnCollectSubRequests func(resp *http.Response) ([]*http.Request, error)
-	OnResponse           func(resp *http.Response, subResps []*http.Response) error
+	OnResponse           func(resp *http.Response, subResps []*http.Response) (*http.Response, error)
 }
 
 // LoadExtensions - load extensions
@@ -34,7 +32,10 @@ func LoadExtensions(config *Config) ([]Extension, error) {
 		if err != nil {
 			return nil, err
 		}
-		ext.OnLoad = extOnLoad.(func() error)
+		err = extOnLoad.(func() error)()
+		if err != nil {
+			return nil, err
+		}
 		// on unload
 		extOnUnload, err := plugin.Lookup("OnUnload")
 		if err != nil {
@@ -46,7 +47,7 @@ func LoadExtensions(config *Config) ([]Extension, error) {
 		if err != nil {
 			return nil, err
 		}
-		ext.OnRequest = extOnRequest.(func(req *http.Request, resp *http.Response) error)
+		ext.OnRequest = extOnRequest.(func(req *http.Request) (*http.Response, error))
 		// on collect sub requests
 		extOnCollectSubRequests, err := plugin.Lookup("OnCollectSubRequests")
 		if err != nil {
@@ -58,7 +59,7 @@ func LoadExtensions(config *Config) ([]Extension, error) {
 		if err != nil {
 			return nil, err
 		}
-		ext.OnResponse = extOnResponse.(func(resp *http.Response, subResps []*http.Response) error)
+		ext.OnResponse = extOnResponse.(func(resp *http.Response, subResps []*http.Response) (*http.Response, error))
 
 		exts = append(exts, ext)
 	}

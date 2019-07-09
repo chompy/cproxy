@@ -1,6 +1,8 @@
 package cproxy
 
 import (
+	"bufio"
+	"bytes"
 	"log"
 	"net"
 	"net/http"
@@ -26,4 +28,25 @@ func RenderErrorPage(w http.ResponseWriter, r *http.Request, err error) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(500)
 	w.Write([]byte(error500HTML))
+}
+
+// HTTPResponseToBytes - convert http response to bytes
+func HTTPResponseToBytes(r *http.Response) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	bufW := bufio.NewWriter(buf)
+	err := r.Write(bufW)
+	if err != nil {
+		return nil, err
+	}
+	bufW.Flush()
+	r.Body.Close()
+	return buf.Bytes(), nil
+}
+
+// HTTPResponseFromBytes - convert bytes to http response
+func HTTPResponseFromBytes(b []byte) (*http.Response, error) {
+	return http.ReadResponse(
+		bufio.NewReader(bytes.NewReader(b)),
+		nil,
+	)
 }
