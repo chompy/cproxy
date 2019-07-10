@@ -7,73 +7,59 @@ import (
 	"plugin"
 )
 
-// Extension - app extension
+// Extension - cproxy extension data
 type Extension struct {
-	OnUnload             func() error
-	OnRequest            func(req *http.Request) (*http.Response, error)
-	OnCollectSubRequests func(resp *http.Response) ([]*http.Request, error)
-	OnResponse           func(resp *http.Response, subResps []*http.Response) (*http.Response, error)
+	OnUnload   func()
+	OnRequest  func(req *http.Request) (*http.Response, error)
+	OnResponse func(resp *http.Response) (*http.Response, error)
 }
 
-// LoadExtensions - load extensions
-func LoadExtensions(config *Config) ([]Extension, error) {
+// LoadExtensions - load extensions and initalize
+func LoadExtensions(config *Config, subRequestCallback func(req *http.Request) (*http.Response, error)) ([]Extension, error) {
 	exts := make([]Extension, 0)
 	for _, name := range config.Extensions.Enabled {
-		ext := Extension{}
 		plugin, err := plugin.Open(
 			path.Join(config.Extensions.Path, name),
 		)
 		if err != nil {
 			return nil, err
 		}
-		log.Println("EXTENSION ::", name, "loaded.")
 		// on load
 		extOnLoad, err := plugin.Lookup("OnLoad")
 		if err != nil {
 			return nil, err
 		}
-		err = extOnLoad.(func() error)()
-		if err != nil {
-			return nil, err
-		}
+		extOnLoad.(func(subRequestCallback func(req *http.Request) (*http.Response, error)) error)(subRequestCallback)
+		log.Println("EXTENSION ::", name, "loaded.")
+		// create ext reference
+		ext := Extension{}
 		// on unload
 		extOnUnload, err := plugin.Lookup("OnUnload")
 		if err != nil {
 			return nil, err
 		}
-		ext.OnUnload = extOnUnload.(func() error)
+		ext.OnUnload = extOnUnload.(func())
 		// on request
 		extOnRequest, err := plugin.Lookup("OnRequest")
 		if err != nil {
 			return nil, err
 		}
 		ext.OnRequest = extOnRequest.(func(req *http.Request) (*http.Response, error))
-		// on collect sub requests
-		extOnCollectSubRequests, err := plugin.Lookup("OnCollectSubRequests")
-		if err != nil {
-			return nil, err
-		}
-		ext.OnCollectSubRequests = extOnCollectSubRequests.(func(resp *http.Response) ([]*http.Request, error))
 		// on response
 		extOnResponse, err := plugin.Lookup("OnResponse")
 		if err != nil {
 			return nil, err
 		}
-		ext.OnResponse = extOnResponse.(func(resp *http.Response, subResps []*http.Response) (*http.Response, error))
-
+		ext.OnResponse = extOnResponse.(func(resp *http.Response) (*http.Response, error))
+		// add ext to list
 		exts = append(exts, ext)
 	}
 	return exts, nil
 }
 
-// UnloadExtensions - unload extensions
-func UnloadExtensions(exts []Extension) error {
-	for index := range exts {
-		exts[index].OnUnload()
-		// not sure if we want to handle errors here or not
-		/*if err != nil {
-			return err
-		}*/
+// UnloadExtensions - unload all extensions
+func UnloadExtensions(exts *[]Extension) {
+	for _, ext := range *exts {
+		ext.OnUnload()
 	}
-	return nil
 }

@@ -13,92 +13,6 @@ import (
 	"./internal/pkg/cproxy"
 )
 
-// HandleRequest - handle a request
-func HandleRequest(r *http.Request, config *cproxy.Config, exts []cproxy.Extension) (*http.Response, error) {
-
-	log.Println("REQUEST ::", r.Method, r.URL.String())
-
-	// call 'OnRequest'
-	log.Println("EVENT :: OnRequest")
-	var resp *http.Response
-	for index := range exts {
-		resp, err := exts[index].OnRequest(r)
-		if err != nil {
-			return nil, err
-		}
-		if resp != nil {
-			break
-		}
-	}
-
-	// backend fetch
-	var err error
-	if resp == nil {
-		resp, err = cproxy.BackendFetch(r, config)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// convert resp to bytes, so same response can be sent to all
-	// OnCollectSubRequest without read issues and fear of modification
-	respBytes, err := cproxy.HTTPResponseToBytes(resp)
-	if err != nil {
-		return nil, err
-	}
-
-	// call 'OnCollectSubRequest' , mostly used for cache esi
-	log.Println("EVENT :: OnCollectSubRequest")
-	extSubResps := make([][]*http.Response, 0)
-	for index := range exts {
-		resp, err = cproxy.HTTPResponseFromBytes(respBytes)
-		resp.Request = r
-		if err != nil {
-			return nil, err
-		}
-		subReqs, err := exts[index].OnCollectSubRequests(resp)
-		if err != nil {
-			return nil, err
-		}
-		subResps := make([]*http.Response, 0)
-		for subIndex := range subReqs {
-			subResp, err := HandleRequest(subReqs[subIndex], config, exts)
-			if err != nil {
-				return nil, err
-			}
-			subResps = append(
-				subResps,
-				subResp,
-			)
-		}
-		extSubResps = append(
-			extSubResps,
-			subResps,
-		)
-	}
-
-	// convert bytes back to repsonse for final output
-	resp, err = cproxy.HTTPResponseFromBytes(respBytes)
-	if err != nil {
-		return nil, err
-	}
-	resp.Request = r
-
-	// call 'OnResponse'
-	log.Println("EVENT :: OnResponse")
-	for index := range exts {
-		resp, err = exts[index].OnResponse(
-			resp,
-			extSubResps[index],
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return resp, nil
-}
-
 func main() {
 
 	// display app name + version
@@ -126,13 +40,17 @@ func main() {
 	if *enableExts != "" {
 		config.Extensions.Enabled = strings.Split(*enableExts, ",")
 	}
-
 	// load extensions
-	exts, err := cproxy.LoadExtensions(&config)
+	var exts []cproxy.Extension
+	exts, err = cproxy.LoadExtensions(
+		&config,
+		func(req *http.Request) (*http.Response, error) {
+			return cproxy.HandleRequest(req, &config, &exts)
+		},
+	)
 	if err != nil {
 		panic(err)
 	}
-	defer cproxy.UnloadExtensions(exts)
 
 	// create listener
 	listener, err := cproxy.GetListener(&config)
@@ -145,15 +63,14 @@ func main() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// handle request
-		resp, err := HandleRequest(
+		resp, err := cproxy.HandleRequest(
 			r,
 			&config,
-			exts,
+			&exts,
 		)
 		if err != nil {
 			panic(err)
 		}
-
 		// set response headers
 		for k, values := range resp.Header {
 			for _, value := range values {
@@ -161,7 +78,6 @@ func main() {
 			}
 		}
 		w.Header().Add("X-Proxy-Name", cproxy.AppName)
-
 		// write status code
 		w.WriteHeader(resp.StatusCode)
 		// set response body
@@ -172,6 +88,7 @@ func main() {
 
 	})
 
+	// determine proxy type and begin listening on configured port
 	switch config.ProxyType {
 	case cproxy.ProxyTypeFCGI:
 		{
