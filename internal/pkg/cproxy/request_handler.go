@@ -1,6 +1,7 @@
 package cproxy
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -20,18 +21,20 @@ func HandleRequest(req *http.Request, config *Config, exts *[]Extension) (*http.
 
 	// call 'OnRequest'
 	var resp *http.Response
-	for _, ext := range *exts {
-		log.Println("REQUEST", requestNumber, ":: EVENT :: OnRequest ::", ext.Name)
-		var err error
-		resp, err = ext.OnRequest(req)
-		if err != nil {
-			return nil, err
-		}
-		if resp != nil {
-			// if response returned then assume it is a cached
-			// response and no further manipulation is needed
-			log.Println("REQUEST", requestNumber, ":: Completed")
-			return resp, nil
+	if exts != nil {
+		for _, ext := range *exts {
+			log.Println("REQUEST", requestNumber, ":: EVENT :: OnRequest ::", ext.Name)
+			var err error
+			resp, err = ext.OnRequest(req)
+			if err != nil {
+				return nil, err
+			}
+			if resp != nil {
+				// if response returned then assume it is a cached
+				// response and no further manipulation is needed
+				log.Println("REQUEST", requestNumber, ":: Completed")
+				return resp, nil
+			}
 		}
 	}
 
@@ -46,14 +49,19 @@ func HandleRequest(req *http.Request, config *Config, exts *[]Extension) (*http.
 	}
 
 	// call 'OnResponse'
-	for _, ext := range *exts {
-		log.Println("REQUEST", requestNumber, ":: EVENT :: OnResponse ::", ext.Name)
-		var err error
-		resp, err = ext.OnResponse(resp)
-		if err != nil {
-			return nil, err
+	if exts != nil {
+		for _, ext := range *exts {
+			log.Println("REQUEST", requestNumber, ":: EVENT :: OnResponse ::", ext.Name)
+			var err error
+			resp, err = ext.OnResponse(resp)
+			if err != nil {
+				return nil, err
+			}
+			if resp == nil {
+				return nil, fmt.Errorf("extension %s OnResponse returned nil response", ext.Name)
+			}
+			resp.Request = req
 		}
-		resp.Request = req
 	}
 
 	log.Println("REQUEST", requestNumber, ":: Completed")

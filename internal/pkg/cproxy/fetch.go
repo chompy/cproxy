@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/fcgi"
@@ -14,29 +15,33 @@ import (
 )
 
 // BackendFetch - fetch content from backend
-func BackendFetch(r *http.Request, config *Config) (*http.Response, error) {
+func BackendFetch(req *http.Request, config *Config) (*http.Response, error) {
 	switch config.ProxyType {
 	case ProxyTypeHTTP:
 		{
-			return httpBackendFetch(r, config)
+			return httpBackendFetch(req, config)
 		}
 	case ProxyTypeFCGI:
 		{
-			return fcgiBackendFetch(r, config)
+			return fcgiBackendFetch(req, config)
+		}
+	case ProxyTypeDummy:
+		{
+			return dummyBackendFetch(req, config)
 		}
 	}
 	return nil, fmt.Errorf("no fetcher found for proxy type '%s'", config.ProxyType)
 }
 
 // httpBackendFetch - fetch content from http backend
-func httpBackendFetch(r *http.Request, config *Config) (*http.Response, error) {
+func httpBackendFetch(req *http.Request, config *Config) (*http.Response, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", config.Connect)
 	if err != nil {
 		return nil, err
 	}
-	r.Host = tcpAddr.String()
+	req.Host = tcpAddr.String()
 	httpConn := http.Client{}
-	oResp, err := httpConn.Do(r)
+	oResp, err := httpConn.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +56,7 @@ func httpBackendFetch(r *http.Request, config *Config) (*http.Response, error) {
 	respBytes := buf.Bytes()
 	resp, err := http.ReadResponse(
 		bufio.NewReader(bytes.NewReader(respBytes)),
-		r,
+		req,
 	)
 	if err != nil {
 		return nil, err
@@ -60,8 +65,8 @@ func httpBackendFetch(r *http.Request, config *Config) (*http.Response, error) {
 }
 
 // fcgiBackendFetch - fetch content from fcgi backend
-func fcgiBackendFetch(r *http.Request, config *Config) (*http.Response, error) {
-	p := GetFCGIEnvVars(r, config)
+func fcgiBackendFetch(req *http.Request, config *Config) (*http.Response, error) {
+	p := GetFCGIEnvVars(req, config)
 	// open connection to backend
 	fcgiConn, err := fcgiclient.Dial("tcp", config.Connect)
 	if err != nil {
@@ -72,7 +77,7 @@ func fcgiBackendFetch(r *http.Request, config *Config) (*http.Response, error) {
 	}
 	defer fcgiConn.Close()
 	// send request
-	oResp, err := fcgiConn.Request(p, r.Body)
+	oResp, err := fcgiConn.Request(p, req.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -87,11 +92,38 @@ func fcgiBackendFetch(r *http.Request, config *Config) (*http.Response, error) {
 	respBytes := buf.Bytes()
 	resp, err := http.ReadResponse(
 		bufio.NewReader(bytes.NewReader(respBytes)),
-		r,
+		req,
 	)
 	if err != nil {
 		return nil, err
 	}
+	return resp, nil
+}
+
+// dummyBackendFetch - dummy fetch function used for testing
+func dummyBackendFetch(req *http.Request, config *Config) (*http.Response, error) {
+	p := GetFCGIEnvVars(req, config)
+	resp := &http.Response{
+		Status:     "200 OK",
+		StatusCode: http.StatusOK,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Request:    req,
+		Header:     make(http.Header, 0),
+	}
+	resp.Header.Add("Content-Type", "text/plain")
+	// create a body of FCGI vars
+	bodyBytes := make([]byte, 0)
+	for key, val := range p {
+		bodyBytes = append(
+			bodyBytes,
+			[]byte(key+"="+val+"\n")...,
+		)
+	}
+	reader := bytes.NewReader(bodyBytes)
+	resp.Body = ioutil.NopCloser(reader)
+	resp.ContentLength = int64(len(bodyBytes))
 	return resp, nil
 }
 

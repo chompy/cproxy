@@ -23,6 +23,9 @@ const ProxyTypeHTTP = "http"
 // ProxyTypeFCGI - denotes FastCGI proxy
 const ProxyTypeFCGI = "fcgi"
 
+// ProxyTypeDummy - denotes dummy test proxy
+const ProxyTypeDummy = "dummy"
+
 // Config - app configuration struct
 type Config struct {
 	ProxyType  string `json:"proxy_type"`
