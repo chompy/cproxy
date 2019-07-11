@@ -26,7 +26,7 @@ func main() {
 	configFilePath := flag.String(
 		"config-path",
 		filepath.Join(filepath.Dir(execPath), cproxy.DefaultConfigFilePath),
-		"Path to store cache files in for file system cache.",
+		"Path to configuration file.",
 	)
 	enableExts := flag.String(
 		"extensions",

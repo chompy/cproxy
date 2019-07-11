@@ -9,6 +9,7 @@ import (
 
 // Extension - cproxy extension data
 type Extension struct {
+	Name       string
 	OnUnload   func()
 	OnRequest  func(req *http.Request) (*http.Response, error)
 	OnResponse func(resp *http.Response) (*http.Response, error)
@@ -24,15 +25,28 @@ func LoadExtensions(config *Config, subRequestCallback func(req *http.Request) (
 		if err != nil {
 			return nil, err
 		}
+		// get config
+		rawConfig := []byte{}
+		if val, ok := config.Extensions.Config[name]; ok {
+			rawConfig = val
+		}
 		// on load
 		extOnLoad, err := plugin.Lookup("OnLoad")
 		if err != nil {
 			return nil, err
 		}
-		extOnLoad.(func(subRequestCallback func(req *http.Request) (*http.Response, error)) error)(subRequestCallback)
-		log.Println("EXTENSION ::", name, "loaded.")
+		extOnLoad.(func(subRequestCallback func(req *http.Request) (*http.Response, error), rawConfig []byte) error)(subRequestCallback, rawConfig)
+		// get name
+		extName := name
+		extGetName, err := plugin.Lookup("GetName")
+		if err == nil {
+			extName = extGetName.(func() string)()
+		}
+		log.Println("EXTENSION ::", extName, "loaded.")
 		// create ext reference
-		ext := Extension{}
+		ext := Extension{
+			Name: extName,
+		}
 		// on unload
 		extOnUnload, err := plugin.Lookup("OnUnload")
 		if err != nil {

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/http/fcgi"
@@ -16,7 +15,6 @@ import (
 
 // BackendFetch - fetch content from backend
 func BackendFetch(r *http.Request, config *Config) (*http.Response, error) {
-	log.Println("FETCH ::", r.Method, r.URL.String())
 	switch config.ProxyType {
 	case ProxyTypeHTTP:
 		{

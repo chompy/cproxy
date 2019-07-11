@@ -29,9 +29,9 @@ type Config struct {
 	Listen     string `json:"listen"`  // 8081, /app/listen.sock
 	Connect    string `json:"connect"` // 127.0.0.1:9000, /app/run.sock
 	Extensions struct {
-		Path    string                 `json:"path"`
-		Enabled []string               `json:"enabled"`
-		Config  map[string]interface{} `json:"config"`
+		Path    string                     `json:"path"`
+		Enabled []string                   `json:"enabled"`
+		Config  map[string]json.RawMessage `json:"config"`
 	} `json:"extensions"`
 }
 
