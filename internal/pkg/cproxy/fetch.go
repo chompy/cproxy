@@ -96,22 +96,26 @@ func fcgiBackendFetch(r *http.Request, config *Config) (*http.Response, error) {
 }
 
 // GetFCGIEnvVars - retrieve FCGI env vars
-func GetFCGIEnvVars(r *http.Request, config *Config) map[string]string {
-	p := fcgi.ProcessEnv(r)
+func GetFCGIEnvVars(req *http.Request, config *Config) map[string]string {
+	p := fcgi.ProcessEnv(req)
 	if p == nil {
 		p = map[string]string{}
 	}
-	p["REQUEST_METHOD"] = r.Method
-	p["REQUEST_URI"] = r.URL.Path
-	p["QUERY_STRING"] = r.URL.Query().Encode()
-	p["CONTENT_LENGTH"] = strconv.FormatInt(r.ContentLength, 10)
-	p["CONTENT_TYPE"] = r.Header.Get("Content-Type")
-	p["HTTP_HOST"] = r.Host
-	// TODO make configurable in plugin
-	/*if config.UseESI {
-		p["HTTP_SURROGATE_CAPABILITY"] = "content=ESI/1.0"
-	}*/
-	for k, values := range r.Header {
+	p["SERVER_SOFTWARE"] = "go"
+	p["SERVER_NAME"] = req.Host
+	p["SERVER_PROTOCOL"] = "HTTP/1.1"
+	p["HTTP_HOST"] = req.Host
+	p["GATEWAY_INTERFACE"] = "CGI/1.1"
+	p["REQUEST_METHOD"] = req.Method
+	p["QUERY_STRING"] = req.URL.RawQuery
+	p["REQUEST_URI"] = req.URL.RequestURI()
+	p["PATH_INFO"] = req.URL.Path
+	//p["SCRIPT_NAME"] = "/"
+	//p["SCRIPT_FILENAME"] = h.Path
+	p["SERVER_PORT"] = req.URL.Port()
+	p["CONTENT_LENGTH"] = strconv.FormatInt(req.ContentLength, 10)
+	p["CONTENT_TYPE"] = req.Header.Get("Content-Type")
+	for k, values := range req.Header {
 		k = "HTTP_" + strings.Replace(strings.ToUpper(k), "-", "_", -1)
 		p[k] = values[0]
 	}
