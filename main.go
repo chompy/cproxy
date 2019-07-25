@@ -33,12 +33,35 @@ func main() {
 		"",
 		"Comma delimited list of extensions to enable.",
 	)
+	proxyType := flag.String(
+		"proxy-type",
+		"",
+		"Type of proxy to employ. (http or fcgi)",
+	)
+	listen := flag.String(
+		"listen",
+		"",
+		"Port or socket to listen on. (socket path, port)",
+	)
+	backend := flag.String(
+		"backend",
+		"",
+		"Backend to connect to. (host:port, socket path, url)",
+	)
 	flag.Parse()
-
 	// load config
 	config := cproxy.LoadConfigFile(*configFilePath)
 	if *enableExts != "" {
 		config.Extensions.Enabled = strings.Split(*enableExts, ",")
+	}
+	if *proxyType != "" {
+		config.ProxyType = *proxyType
+	}
+	if *listen != "" {
+		config.Listen = *listen
+	}
+	if *backend != "" {
+		config.Backend = *backend
 	}
 	// load extensions
 	var exts []cproxy.Extension

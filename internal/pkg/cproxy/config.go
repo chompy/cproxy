@@ -30,7 +30,7 @@ const ProxyTypeDummy = "dummy"
 type Config struct {
 	ProxyType  string `json:"proxy_type"`
 	Listen     string `json:"listen"`  // 8081, /app/listen.sock
-	Connect    string `json:"connect"` // 127.0.0.1:9000, /app/run.sock
+	Backend    string `json:"backend"` // 127.0.0.1:9000, /app/run.sock, https://www.example.com
 	Extensions struct {
 		Path    string                     `json:"path"`
 		Enabled []string                   `json:"enabled"`
@@ -51,7 +51,7 @@ func GetDefaultConfig() Config {
 	config := Config{
 		ProxyType: proxyType,
 		Listen:    listenPort,
-		Connect:   "/run/app.sock",
+		Backend:   "/run/app.sock",
 	}
 	config.Extensions.Path = "ext"
 	execPath, err := os.Executable()

@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/fcgi"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -35,12 +35,15 @@ func BackendFetch(req *http.Request, config *Config) (*http.Response, error) {
 
 // httpBackendFetch - fetch content from http backend
 func httpBackendFetch(req *http.Request, config *Config) (*http.Response, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", config.Connect)
+	connectURL, err := url.Parse(config.Backend)
 	if err != nil {
 		return nil, err
 	}
-	req.Host = tcpAddr.String()
+	req.Host = connectURL.Host
+	req.URL.Scheme = connectURL.Scheme
+	req.URL.Host = connectURL.Host
 	httpConn := http.Client{}
+	req.RequestURI = ""
 	oResp, err := httpConn.Do(req)
 	if err != nil {
 		return nil, err
@@ -68,9 +71,9 @@ func httpBackendFetch(req *http.Request, config *Config) (*http.Response, error)
 func fcgiBackendFetch(req *http.Request, config *Config) (*http.Response, error) {
 	p := GetFCGIEnvVars(req, config)
 	// open connection to backend
-	fcgiConn, err := fcgiclient.Dial("tcp", config.Connect)
+	fcgiConn, err := fcgiclient.Dial("tcp", config.Backend)
 	if err != nil {
-		fcgiConn, err = fcgiclient.Dial("unix", config.Connect)
+		fcgiConn, err = fcgiclient.Dial("unix", config.Backend)
 		if err != nil {
 			return nil, err
 		}
